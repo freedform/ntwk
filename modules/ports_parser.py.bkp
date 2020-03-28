@@ -1,0 +1,179 @@
+from classes.pgsql_class import DatabaseClass
+from classes.net_addr import AddressMod
+
+
+def vlan_range(vlan_list):
+    for_result = []
+    for vlan in vlan_list.split(','):
+        if "-" in vlan:
+            start, stop = [int(x) for x in vlan.split("-")]
+            for num in range(start, stop + 1):
+                for_result.append(num)
+        else:
+            for_result.append(int(vlan))
+    return for_result
+
+
+def ports(config_dir, path_delimiter):
+    dev_query = """
+select 	
+    t1.dev_id,
+    t1.dev_name,
+    t8.location_name,
+    t6.vendor_name,
+    t7.type_name,
+    t3.re as access_re,
+    t3.pos as access_position,
+    t4.re as trunk_re,
+    t4.pos as trunk_position,
+    t5.re as ip_re,
+    t5.pos as ip_position
+from 
+    "tbl_INVENTORY" t1 
+        left join "tbl_REG_EXP_SUMMARY" t2 
+            on 
+                t1.vendor_id = t2.vendor_id
+                and
+                t1.type_id = t2.type_id
+        left join "tbl_ACCESS_RE" t3 
+            on 
+                t2.access_re_id = t3.re_id
+        left join "tbl_TRUNK_RE" t4 
+            on 
+                t2.trunk_re_id = t4.re_id
+        left join "tbl_IP_RE" t5 
+            on 
+                t2.ip_re_id = t5.re_id
+        left join "tbl_VENDORS" t6 
+            on 
+                t1.vendor_id = t6.vendor_id
+        left join "tbl_TYPES" t7 
+            on
+                t1.type_id = t7.type_id
+        left join "tbl_LOCATIONS" t8 
+            on 
+                t1.location_id = t8.location_id;
+"""
+    backup_summary = """
+INSERT INTO
+    \"tbl_INTERFACE_SUMMARY_history\"
+        SELECT 
+            * 
+        FROM 
+            \"tbl_INTERFACE_SUMMARY\"
+"""
+    truncate_summaty = """TRUNCATE \"tbl_INTERFACE_SUMMARY\";"""
+    db = DatabaseClass()
+    # db.insert(backup_summary)
+    # db.raw_query(truncate_summaty)
+    port_re_data = db.select(dev_query)
+    for item in port_re_data:
+        dev_id, dev_name = item[0], item[1]
+        location_name = item[2]
+        vendor_name, type_name = item[3], item[4]
+        access_re, access_pos = item[5], item[6]
+        trunk_re, trunk_pos = item[7], item[8]
+        ip_re, ip_pos = item[9], item[10]
+        file_list = [config_dir, location_name, dev_name]
+        file_path = path_delimiter.join(file_list)
+        try:
+            import_class = __import__('classes.cisco_ports', fromlist=[vendor_name])
+            class_ins = getattr(import_class, vendor_name, 'Error')
+            ins = class_ins(file_path)
+            # ACCESS_PORTS
+            if access_re is not None:
+                ins.access_ports(access_re, access_pos)
+                access_dict = ins.summary_dict['access_ports']
+                if len(access_dict) != 0:
+                    port_type = "'a'"
+                    access_values = []
+                    for a_port in access_dict:
+                        a_port['int_name'] = f"'{a_port['int_name']}'"
+                        if not a_port['voice_vlan']:
+                            a_port['voice_vlan'] = 'NULL'
+                        for_access = f"(" \
+                            f"{port_type}, " \
+                            f"{dev_id}, " \
+                            f"{a_port['int_name']}, " \
+                            f"{a_port['access_vlan']}, " \
+                            f"{a_port['voice_vlan']})"
+                        access_values.append(for_access)
+                    access_final = ','.join(access_values)
+                    access_insert = f"""
+INSERT INTO
+    \"tbl_INTERFACE_SUMMARY\"
+    (port_type, dev_id, int_name, access_vlan, voice_vlan)
+VALUES
+    {access_final}
+"""
+                    # db.insert(access_insert)
+                else:
+                    pass
+            else:
+                pass
+            if trunk_re is not None:
+                ins.trunk_ports(trunk_re, trunk_pos)
+                trunk_dict = ins.summary_dict['trunk_ports']
+                if len(trunk_dict) != 0:
+                    port_type = "'t'"
+                    trunk_values = []
+                    for t_port in trunk_dict:
+                        t_port['int_name'] = f"'{t_port['int_name']}'"
+                        if not t_port['native_vlan']:
+                            t_port['native_vlan'] = 'NULL'
+                        t_port['allowed_vlans'] = vlan_range(t_port['allowed_vlans'])
+                        for_trunk = f"(" \
+                            f"{port_type}," \
+                            f" {dev_id}," \
+                            f" {t_port['int_name']}," \
+                            f" {t_port['native_vlan']}," \
+                            f" ARRAY{t_port['allowed_vlans']})"
+                        trunk_values.append(for_trunk)
+                    trunk_final = ','.join(trunk_values)
+                    trunk_insert = f"""
+INSERT INTO
+    \"tbl_INTERFACE_SUMMARY\"
+    (port_type, dev_id, int_name, native_vlan, allowed_vlans)
+VALUES
+    {trunk_final}
+"""
+                    # db.insert(trunk_insert)
+                else:
+                    pass
+            else:
+                pass
+
+            if ip_re is not None:
+                ins.ip_ports(ip_re, ip_pos)
+                ip_dict = ins.summary_dict['ip_ports']
+                if len(ip_dict) != 0:
+                    port_type = "'i'"
+                    ip_values = []
+                    for i_port in ip_dict:
+                        i_port['int_name'] = f"'{i_port['int_name']}'"
+                        if not i_port['dot1q_id']:
+                            i_port['dot1q_id'] = "NULL"
+                        am = AddressMod(i_port['ip_address'])
+                        ip_address = f"'{am.host()}'"
+                        ip_network = f"'{am.net_prefix()}'"
+                        for_ip = f"(" \
+                            f"{port_type}," \
+                            f"{dev_id}," \
+                            f"{i_port['int_name']}," \
+                            f"{ip_address}," \
+                            f"{ip_network}," \
+                            f"{i_port['dot1q_id']})"
+                        ip_values.append(for_ip)
+                    ip_final = ','.join(ip_values)
+                    ip_insert = f"""
+INSERT INTO
+    \"tbl_INTERFACE_SUMMARY\"
+    (port_type, dev_id, int_name,ip_address, ip_network, dot1q_id)
+VALUES
+    {ip_final}
+"""
+                    # db.insert(ip_insert)
+
+        except Exception as error:
+            print("Error", error)
+    db.connect_close()

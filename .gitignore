@@ -1,0 +1,11 @@
+configs/
+summary/
+templates/
+.idea/
+
+
+conns.py
+inventory_main
+ospf_clear
+parser.py
+scratch_1.py
