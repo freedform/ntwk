@@ -1,7 +1,6 @@
 import argparse
 from modules import menu, inventory, collect_facts, git_module, ports_parser, ansible_m
 
-repo_dir = r'C:\Users\isimashev\PycharmProjects\network_config\backups'
 summary_dir = r'C:\Users\isimashev\PycharmProjects\network_config\summary'
 backup_dir = r'C:\Users\isimashev\PycharmProjects\network_config\configs'
 inventory_file = r'C:\Users\isimashev\PycharmProjects\network_config\inventory_main'
