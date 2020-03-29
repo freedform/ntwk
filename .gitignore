@@ -2,6 +2,7 @@ configs/
 summary/
 templates/
 .idea/
+__pycache__
 
 
 conns.py
