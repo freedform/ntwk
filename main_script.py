@@ -1,9 +1,6 @@
 import argparse
 from modules import menu, inventory, collect_facts, git_module, ports_parser, ansible_m
-
-summary_dir = r'C:\Users\isimashev\PycharmProjects\network_config\summary'
-backup_dir = r'C:\Users\isimashev\PycharmProjects\network_config\configs'
-inventory_file = r'C:\Users\isimashev\PycharmProjects\network_config\inventory_main'
+from ntwk_conf import summary_dir, backup_dir, inventory_file
 
 if __name__ == '__main__':
     input_parser = argparse.ArgumentParser()

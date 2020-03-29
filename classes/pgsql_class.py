@@ -1,13 +1,13 @@
 import psycopg2
-
+from ntwk_conf import db_host, db_name, user_name, user_pass
 
 class DatabaseClass:
     def __init__(self):
         try:
-            self.connect = psycopg2.connect(dbname='network',
-                                            user='netadmin',
-                                            password='Qazxswe123',
-                                            host='10.160.11.88')
+            self.connect = psycopg2.connect(dbname=db_name,
+                                            user=user_name,
+                                            password=user_pass,
+                                            host=db_host)
             self.cursor = self.connect.cursor()
         except Exception as error:
             print("Error while connecting to PostgreSQL", error)
